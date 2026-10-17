@@ -12,6 +12,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 
 #define VID_SONY 0x054C
 #define PID_DUALSENSE 0x0CE6
@@ -165,6 +166,100 @@ static void ds_send_output(void) {
     if (g_out_want != g_out_sent && g_wevent) SetEvent(g_wevent);
 }
 
+static int16_t rd16(const uint8_t *p) { return (int16_t)(p[0] | (p[1] << 8)); }
+
+// ---------------------------------------------------------------- motion
+// Factory calibration (feature report 0x05), applied the same way as Linux hid-playstation.
+// Output units match what libScePad gives for a DS4: accel in g, gyro in rad/s, plus an
+// orientation quaternion (x, y, z, w) integrated from the gyro with gravity tilt correction.
+struct calib { float bias, scale; };
+static struct calib g_gyro_cal[3], g_acc_cal[3];
+static float g_acc[3], g_gyr[3], g_q[4] = {0, 0, 0, 1};
+static uint32_t g_last_ts;
+static int g_have_ts;
+static volatile LONG g_reset_q;
+
+static void calib_defaults(void) {
+    for (int i = 0; i < 3; i++) {
+        g_gyro_cal[i].bias = 0; g_gyro_cal[i].scale = (3.14159265f / 180.0f) / 16.384f; // +-2000 dps
+        g_acc_cal[i].bias = 0;  g_acc_cal[i].scale = 1.0f / 8192.0f;
+    }
+}
+
+static void calib_read(HANDLE h) {
+    calib_defaults();
+    uint8_t b[64] = {0x05};
+    if (!HidD_GetFeature(h, b, 41)) { LOG("calibration read failed, using defaults"); return; }
+    int pb = rd16(b + 1), yb = rd16(b + 3), rb = rd16(b + 5);
+    int pp = rd16(b + 7), pm = rd16(b + 9), yp = rd16(b + 11), ym = rd16(b + 13), rp = rd16(b + 15), rm = rd16(b + 17);
+    int speed2x = rd16(b + 19) + rd16(b + 21);
+    int bias[3] = {pb, yb, rb}, plus[3] = {pp, yp, rp}, minus[3] = {pm, ym, rm};
+    for (int i = 0; i < 3; i++) {
+        int den = abs(plus[i] - bias[i]) + abs(minus[i] - bias[i]);
+        // hid-playstation uses bias 0 for the DualSense gyro; bias only enters the range
+        if (den > 0 && speed2x > 0) g_gyro_cal[i].scale = (float)speed2x / den * (3.14159265f / 180.0f);
+    }
+    for (int i = 0; i < 3; i++) {
+        int ap = rd16(b + 23 + i * 4), am = rd16(b + 25 + i * 4);
+        int range2g = ap - am;
+        if (range2g > 0) {
+            g_acc_cal[i].bias = ap - range2g / 2.0f;
+            g_acc_cal[i].scale = 2.0f / range2g;
+        }
+    }
+    LOG("calibration: gyro scale %.6g %.6g %.6g, acc bias %.0f %.0f %.0f scale %.6g",
+        g_gyro_cal[0].scale, g_gyro_cal[1].scale, g_gyro_cal[2].scale,
+        g_acc_cal[0].bias, g_acc_cal[1].bias, g_acc_cal[2].bias, g_acc_cal[0].scale);
+}
+
+static void quat_normalize(float *q) {
+    float n = sqrtf(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+    if (n < 1e-6f) { q[0] = q[1] = q[2] = 0; q[3] = 1; return; }
+    for (int i = 0; i < 4; i++) q[i] /= n;
+}
+
+// Called by the reader thread for every input report (d = report payload after id/header).
+static void motion_update(const uint8_t *d) {
+    float acc[3], gyr[3];
+    for (int i = 0; i < 3; i++) {
+        gyr[i] = (rd16(d + 15 + 2 * i) - g_gyro_cal[i].bias) * g_gyro_cal[i].scale;
+        acc[i] = (rd16(d + 21 + 2 * i) - g_acc_cal[i].bias) * g_acc_cal[i].scale;
+        if (fabsf(gyr[i]) <= 0.01745329f) gyr[i] = 0; // 1 deg/s deadband, as libScePad does
+    }
+    uint32_t ts = (uint32_t)(d[27] | (d[28] << 8) | (d[29] << 16) | ((uint32_t)d[30] << 24));
+    float dt = g_have_ts ? (uint32_t)(ts - g_last_ts) / 3.0f * 1e-6f : 0; // 0.33 us ticks
+    g_last_ts = ts; g_have_ts = 1;
+    if (dt <= 0 || dt > 0.1f) dt = 0;
+
+    EnterCriticalSection(&g_cs);
+    float *q = g_q;
+    if (InterlockedExchange(&g_reset_q, 0)) { q[0] = q[1] = q[2] = 0; q[3] = 1; }
+    if (dt > 0) {
+        // Mahony-style: nudge the gyro toward the measured gravity direction
+        float w[3] = {gyr[0], gyr[1], gyr[2]};
+        float an = sqrtf(acc[0] * acc[0] + acc[1] * acc[1] + acc[2] * acc[2]);
+        if (an > 0.8f && an < 1.2f) {
+            float ax = acc[0] / an, ay = acc[1] / an, az = acc[2] / an;
+            float x = q[0], y = q[1], z = q[2], qw = q[3];
+            // gravity "up" (+Y at rest) rotated into the sensor frame
+            float vx = 2 * (x * y + qw * z), vy = qw * qw - x * x + y * y - z * z, vz = 2 * (y * z - qw * x);
+            const float K = 0.5f;
+            w[0] += K * (ay * vz - az * vy);
+            w[1] += K * (az * vx - ax * vz);
+            w[2] += K * (ax * vy - ay * vx);
+        }
+        float x = q[0], y = q[1], z = q[2], qw = q[3], h = 0.5f * dt;
+        q[0] += h * (qw * w[0] + y * w[2] - z * w[1]);
+        q[1] += h * (qw * w[1] + z * w[0] - x * w[2]);
+        q[2] += h * (qw * w[2] + x * w[1] - y * w[0]);
+        q[3] += h * (-x * w[0] - y * w[1] - z * w[2]);
+        quat_normalize(q);
+    }
+    memcpy(g_acc, acc, sizeof acc);
+    memcpy(g_gyr, gyr, sizeof gyr);
+    LeaveCriticalSection(&g_cs);
+}
+
 static DWORD WINAPI ds_reader(LPVOID unused) {
     (void)unused;
     uint8_t buf[128];
@@ -180,6 +275,7 @@ static DWORD WINAPI ds_reader(LPVOID unused) {
             memcpy(g_report, buf, got < sizeof g_report ? got : sizeof g_report);
             g_have_report = 1;
             LeaveCriticalSection(&g_cs);
+            motion_update(buf + (buf[0] == 0x31 ? 2 : 1));
         }
     }
     EnterCriticalSection(&g_cs);
@@ -223,10 +319,7 @@ static int ds_find_and_open(void) {
                     g_out_len = caps.OutputReportByteLength;
                     g_is_bt = (g_in_len > 64);
                     LOG("DualSense found pid=%04X in=%u out=%u bt=%d", at.ProductID, g_in_len, g_out_len, g_is_bt);
-                    if (g_is_bt) { // reading feature 0x05 switches BT pad to full reports
-                        uint8_t fr[41] = {0x05};
-                        HidD_GetFeature(h, fr, sizeof fr);
-                    }
+                    calib_read(h); // reading feature 0x05 also switches a BT pad to full reports
                     g_dev = h;
                     lstrcpynW(g_path, det->DevicePath, 512);
                     ok = 1;
@@ -289,15 +382,18 @@ static void ds_close(void) {
 #define B_TOUCHPAD 0x100000
 
 static void put_f(uint8_t *p, float v) { memcpy(p, &v, 4); }
-static int16_t rd16(const uint8_t *p) { return (int16_t)(p[0] | (p[1] << 8)); }
 
 static int ds_read_state(uint8_t *out /* ScePadData, 0x78 bytes */) {
     memset(out, 0, 0x78);
     uint8_t r[128];
     int have;
+    float acc[3], gyr[3], q[4];
     EnterCriticalSection(&g_cs);
     memcpy(r, g_report, sizeof r);
     have = g_have_report;
+    memcpy(acc, g_acc, sizeof acc);
+    memcpy(gyr, g_gyr, sizeof gyr);
+    memcpy(q, g_q, sizeof q);
     LeaveCriticalSection(&g_cs);
 
     // defaults: neutral sticks, identity orientation, 1g down
@@ -352,15 +448,10 @@ static int ds_read_state(uint8_t *out /* ScePadData, 0x78 bytes */) {
     }
 #endif
 
-    // motion: gyro 15..20, accel 21..26 (raw int16)
-    const float G = 1.0f / 8192.0f;
-    const float RAD = (3.14159265f / 180.0f) / 16.0f; // ~2000dps/32768 approx, rough
-    put_f(out + 0x1c, rd16(d + 21) * G);
-    put_f(out + 0x20, rd16(d + 23) * G);
-    put_f(out + 0x24, rd16(d + 25) * G);
-    put_f(out + 0x28, rd16(d + 15) * RAD);
-    put_f(out + 0x2c, rd16(d + 17) * RAD);
-    put_f(out + 0x30, rd16(d + 19) * RAD);
+    // motion (computed per report by motion_update)
+    for (int i = 0; i < 4; i++) put_f(out + 0x0c + 4 * i, q[i]);
+    for (int i = 0; i < 3; i++) put_f(out + 0x1c + 4 * i, acc[i]);
+    for (int i = 0; i < 3; i++) put_f(out + 0x28 + 4 * i, gyr[i]);
 
     // touch: points at 32 and 36
     int n = 0;
@@ -539,6 +630,7 @@ EXP int scePadResetLightBar(int handle) {
 }
 
 EXP int scePadResetOrientation(int handle) {
+    if (handle == g_primary) InterlockedExchange(&g_reset_q, 1);
     return fwd(F_ResetOrientation, handle, 0, 0, 0, 0, 0);
 }
 

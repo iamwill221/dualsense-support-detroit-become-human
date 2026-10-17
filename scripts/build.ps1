@@ -32,5 +32,6 @@ if ($Tools) {
     Invoke-Zig @('-O1', '-o', "$out\padtest.exe", "$root\tools\padtest.c")
     Invoke-Zig @('-O1', '-o', "$out\perf.exe", "$root\tools\perf.c")
     Invoke-Zig @('-O1', '-o', "$out\ditest.exe", "$root\tools\ditest.c", '-ldinput8', '-ldxguid')
+    Invoke-Zig @('-O1', '-o', "$out\motiontest.exe", "$root\tools\motiontest.c")
     Write-Host "built tools in $out"
 }

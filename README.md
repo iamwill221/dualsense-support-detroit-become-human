@@ -25,6 +25,8 @@ functions as the original:
 - **DualSense stand-in.** When player 1's slot reports no DS4 connected, the proxy opens the
   DualSense over HID and fills the game's `ScePadData` (0x78 bytes; layout taken from the
   original `scePadReadState`) with translated buttons, sticks, triggers, touchpad and motion.
+  Motion uses the pad's factory calibration (feature report `0x05`); the orientation
+  quaternion is integrated from the gyro with gravity tilt correction.
 - **Output.** `scePadSetVibration` / `SetLightBar` are converted to DualSense output reports
   and sent from a worker thread on a separate handle, only when values change. Sending them
   synchronously stalled game frames, which caused lag.
@@ -69,6 +71,7 @@ The proxy always writes a short lifecycle log to `%TEMP%\dualsense_proxy.log`
 | `padtest.exe <dll>` | Opens player 1 and prints connection, buttons, sticks and triggers for 3 s |
 | `perf.exe <dll>` | Times per-frame ReadState + SetVibration + SetLightBar calls |
 | `ditest.exe <dll>` | Lists DirectInput game controllers before and after loading the DLL |
+| `motiontest.exe <dll> [seconds]` | Prints orientation, acceleration and gyro for player 1 |
 
 ## Status
 
@@ -76,7 +79,8 @@ The proxy always writes a short lifecycle log to `%TEMP%\dualsense_proxy.log`
 |---|---|
 | Buttons, sticks, triggers, D-pad over USB | Working |
 | PlayStation prompts, rumble, lightbar | Working |
-| Touchpad, gyro / accelerometer | Mapped, untested in game |
+| Gyro / accelerometer | Factory-calibrated; orientation computed from gyro + gravity. Verified at rest, untested in game |
+| Touchpad | Mapped, untested in game |
 | Bluetooth | Implemented (report `0x31` + CRC32), untested |
 | Unplug / replug mid-game | Retries every 2 s, untested |
 | Adaptive triggers, DualSense haptic effects | Not possible, since the game never asks for them |
