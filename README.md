@@ -11,7 +11,9 @@ buttons on screen, rumble, lightbar and motion. You don't need Steam Input or DS
 
 ### Install
 
-1. Download `Detroit-DualSense-<version>.zip` and unzip it anywhere.
+1. Download `Detroit-DualSense-<version>.zip` from the
+   [latest release](https://github.com/iamwill221/dualsense-support-detroit-become-human/releases/latest)
+   and unzip it anywhere.
 2. Double-click **`Install.bat`**. It finds the game by itself. If Windows asks for
    permission, click **Yes**.
 3. In Steam, right-click the game > **Properties** > **Controller** and choose
