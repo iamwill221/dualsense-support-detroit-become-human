@@ -1,0 +1,6 @@
+build/
+*.dll
+*.exe
+*.pdb
+*.lib
+*.log
