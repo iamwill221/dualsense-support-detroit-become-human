@@ -22,6 +22,19 @@ buttons on screen, rumble, lightbar and motion. You don't need Steam Input or DS
 
 If a game update removes DualSense support, run `Install.bat` again.
 
+### Manual install (without Install.bat)
+
+1. Close the game. In Steam, right-click the game > *Manage* > *Browse local files*.
+2. Rename the game's `libScePad.dll` to **`libScePad_orig.dll`**.
+3. Copy `libScePad.dll` from the zip into the game folder.
+4. Do step 3 of the install above (disable Steam Input).
+
+> Don't just overwrite the game's `libScePad.dll`. The new DLL needs the original next to it
+> as `libScePad_orig.dll`, otherwise the controller won't work. If that happens, use Steam >
+> *Verify integrity of game files*, then follow the steps above.
+
+To undo it manually, delete `libScePad.dll` and rename `libScePad_orig.dll` back to `libScePad.dll`.
+
 ### Uninstall
 
 Double-click **`Uninstall.bat`**, or use Steam > *Verify integrity of game files*.
@@ -43,7 +56,7 @@ Double-click **`Uninstall.bat`**, or use Steam > *Verify integrity of game files
 | Buttons, sticks, triggers, D-pad | ✅ |
 | PlayStation button prompts | ✅ |
 | Rumble, lightbar | ✅ |
-| Motion (gyro / accelerometer) | ✅ Tested outside the game |
+| Motion (gyro / accelerometer) | ✅ |
 | Touchpad | ✅ |
 | USB and Bluetooth | ✅ |
 | Adaptive triggers, DualSense haptic effects | ❌ The game never asks for them |
