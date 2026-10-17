@@ -1,4 +1,5 @@
 # DualSense support for Detroit: Become Human (PC)
+<img width="1672" height="941" alt="image" src="https://github.com/user-attachments/assets/c0e07211-d036-4092-a638-9feea438ad8c" />
 
 Play *Detroit: Become Human* on PC with a **PS5 DualSense** controller: PlayStation
 buttons on screen, rumble, lightbar and motion. You don't need Steam Input or DS4Windows.
