@@ -1,19 +1,49 @@
-# Installs build\libScePad.dll into the game folder, keeping the original as libScePad_orig.dll.
-# Safe to re-run, e.g. after a game update or "Verify integrity" restored the original.
-param([string]$GameDir = 'C:\Program Files (x86)\Steam\steamapps\common\Detroit Become Human')
+# Installs the DualSense proxy into Detroit: Become Human, keeping the original
+# libScePad.dll as libScePad_orig.dll. Safe to re-run (e.g. after a game update).
+# Finds the game automatically; pass -GameDir to override.
+param([string]$GameDir, [switch]$Pause)
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
-$proxy = Join-Path $root 'build\libScePad.dll'
-$dll = Join-Path $GameDir 'libScePad.dll'
-$orig = Join-Path $GameDir 'libScePad_orig.dll'
+. (Join-Path $PSScriptRoot 'common.ps1')
 
-if (-not (Test-Path $proxy)) { throw "Run scripts\build.ps1 first ($proxy missing)" }
-if (-not (Test-Path $dll)) { throw "libScePad.dll not found in $GameDir" }
-if (Get-Process DetroitBecomeHuman -ErrorAction SilentlyContinue) { throw "Close the game first" }
+try {
+    # release zip: DLL next to this script; repo: build\libScePad.dll
+    $proxy = @((Join-Path $PSScriptRoot 'libScePad.dll'),
+               (Join-Path (Split-Path -Parent $PSScriptRoot) 'build\libScePad.dll')) |
+             Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $proxy) { throw "libScePad.dll not found next to this script or in build\ (run scripts\build.ps1 first)." }
 
-if (-not (Test-Path $orig)) {
-    Move-Item $dll $orig
-    Write-Host "original saved as libScePad_orig.dll"
+    $GameDir = Resolve-GameDir $GameDir
+    Write-Host "Game folder: $GameDir"
+    $dll = Join-Path $GameDir 'libScePad.dll'
+    $orig = Join-Path $GameDir 'libScePad_orig.dll'
+    if (-not (Test-Path $dll) -and -not (Test-Path $orig)) { throw "libScePad.dll is missing from the game folder. Use Steam > Verify integrity of game files, then try again." }
+
+    if (-not (Test-CanWrite $GameDir)) {
+        Restart-Elevated $PSCommandPath $GameDir -Pause:$Pause
+        return
+    }
+    Assert-GameClosed
+
+    if (-not (Test-Path $orig)) {
+        if (Test-IsProxy $dll) { throw "The game's original libScePad.dll is gone. Use Steam > Verify integrity of game files, then try again." }
+        Move-Item $dll $orig
+        Write-Host "Original saved as libScePad_orig.dll"
+    }
+    Copy-Item $proxy $dll -Force
+
+    Write-Done "DualSense support installed."
+    Write-Host @"
+
+One more step, in Steam:
+  right-click Detroit: Become Human > Properties > Controller
+  > set it to "Disable Steam Input".
+
+Then plug in your DualSense (USB) and start the game.
+If a game update ever removes DualSense support, just run Install again.
+"@
+} catch {
+    Write-Host ""
+    Write-Host "Install failed: $($_.Exception.Message)" -ForegroundColor Red
+} finally {
+    if ($Pause) { Write-Host ""; Read-Host "Press Enter to close" | Out-Null }
 }
-Copy-Item $proxy $dll -Force
-Write-Host "proxy installed. Remember: Steam Input must be disabled for this game."

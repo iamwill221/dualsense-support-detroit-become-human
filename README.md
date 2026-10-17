@@ -1,4 +1,4 @@
-# Detroit: Become Human — DualSense proxy
+# Detroit: Become Human — DualSense support
 
 Native DualSense (PS5) controller support for the PC version of *Detroit: Become Human*,
 with PlayStation button prompts, rumble and lightbar, without Steam Input or DS4Windows.
