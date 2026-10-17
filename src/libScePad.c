@@ -18,7 +18,6 @@
 #define PID_DUALSENSE 0x0CE6
 #define PID_DUALSENSE_EDGE 0x0DF2
 
-#define SCE_PAD_ERROR_ALREADY_OPENED 0x80920004
 #define SCE_PAD_ERROR_INVALID_HANDLE 0x80920003
 
 // ---------------------------------------------------------------- logging
