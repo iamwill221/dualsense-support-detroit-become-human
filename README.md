@@ -1,89 +1,114 @@
-# Detroit: Become Human — DualSense support
+# DualSense for Detroit: Become Human (PC)
 
-Native DualSense (PS5) controller support for the PC version of *Detroit: Become Human*,
-with PlayStation button prompts, rumble and lightbar, without Steam Input or DS4Windows.
+Play *Detroit: Become Human* on PC with a **PS5 DualSense** controller: PlayStation
+buttons on screen, rumble, lightbar and motion. You don't need Steam Input or DS4Windows.
 
-It is a single drop-in DLL. The game files are not otherwise modified.
+## For players
 
-## Why
+### Install
 
-The game talks to Sony controllers through a bundled `libScePad.dll`. That library only
-accepts DualShock 4 USB IDs (`054C:05C4`, `054C:09CC`, plus the `0BA0` wireless adapter), so a
-DualSense (`054C:0CE6`) is ignored. The DualSense also uses different HID report layouts, so
-patching the ID check alone would not work.
+1. Download `Detroit-DualSense-<version>.zip` and unzip it anywhere.
+2. Double-click **`Install.bat`**. It finds the game by itself. If Windows asks for
+   permission, click **Yes**.
+3. In Steam, right-click the game > **Properties** > **Controller** and choose
+   **Disable Steam Input**.
+4. Plug in the DualSense with a **USB cable** and start the game.
 
-Windows additionally exposes the DualSense as a generic DirectInput gamepad, which the game
-reads with Xbox prompts. That makes the prompts flip between Xbox and PlayStation icons.
+If a game update removes DualSense support, run `Install.bat` again.
 
-## How it works
+### Uninstall
+
+Double-click **`Uninstall.bat`**, or use Steam > *Verify integrity of game files*.
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Xbox buttons on screen, or they flip between Xbox and PlayStation | Steam Input is still on (step 3) |
+| Controller does nothing | Use a USB cable. Bluetooth is not tested yet |
+| "Windows protected your PC" | Click **More info** > **Run anyway** |
+| The installer can't find the game | Paste the game folder when it asks. To find it: Steam > right-click the game > *Manage* > *Browse local files* |
+| Something else | Open `%TEMP%\dualsense_proxy.log` and include it in your bug report |
+
+### What works
+
+| Feature | Status |
+|---|---|
+| Buttons, sticks, triggers, D-pad | ✅ |
+| PlayStation button prompts | ✅ |
+| Rumble, lightbar | ✅ |
+| Motion (gyro / accelerometer) | ✅ Tested outside the game |
+| Touchpad | Mapped, not tested in game |
+| Bluetooth | Written, not tested |
+| Adaptive triggers, DualSense haptic effects | ❌ The game never asks for them |
+
+The DualSense has no classic rumble motors. It plays the game's rumble through its
+haptic actuators, so vibration feels sharper than on a PS4 controller.
+
+---
+
+## For developers
+
+### Why this is needed
+
+The game reads Sony controllers through a bundled `libScePad.dll`. That library only
+accepts DualShock 4 USB IDs (`054C:05C4`, `054C:09CC`, and the `0BA0` adapter), so a DualSense
+(`054C:0CE6`) is ignored. The DualSense also sends its data in a different format, so
+patching the ID check alone would not be enough.
+
+Windows also exposes the DualSense as a generic DirectInput gamepad, which the game reads
+with Xbox prompts. That is why the prompts flip between Xbox and PlayStation icons.
+
+### How it works
 
 `src/libScePad.c` builds a replacement `libScePad.dll` that exports the same 19 `scePad*`
-functions as the original:
+functions:
 
 - **Forwarding.** Every call goes to the original library (renamed `libScePad_orig.dll`), so a
   real DS4 keeps working and takes priority.
-- **DualSense stand-in.** When player 1's slot reports no DS4 connected, the proxy opens the
-  DualSense over HID and fills the game's `ScePadData` (0x78 bytes; layout taken from the
-  original `scePadReadState`) with translated buttons, sticks, triggers, touchpad and motion.
-  Motion uses the pad's factory calibration (feature report `0x05`); the orientation
-  quaternion is integrated from the gyro with gravity tilt correction.
-- **Output.** `scePadSetVibration` / `SetLightBar` are converted to DualSense output reports
-  and sent from a worker thread on a separate handle, only when values change. Sending them
-  synchronously stalled game frames, which caused lag.
-- **DirectInput hiding.** At load, the proxy redirects the game's `DirectInput8Create`
-  import and filters the DualSense out of `EnumDevices` / `CreateDevice`, so the game
-  only sees it once, as a PlayStation pad.
+- **DualSense stand-in.** When player 1 has no DS4 connected, the proxy opens the DualSense
+  over HID. It fills the game's `ScePadData` (0x78 bytes; layout taken from the original
+  `scePadReadState`) with translated buttons, sticks, triggers, touchpad and motion.
+- **Motion.** The proxy uses the pad's factory calibration (feature report `0x05`), then
+  calculates the orientation quaternion from the gyro, with gravity tilt correction.
+- **Output.** `scePadSetVibration` / `SetLightBar` become DualSense output reports. They are
+  sent from a worker thread on a separate handle, and only when the values change.
+  Sending them synchronously stalled game frames.
+- **DirectInput hiding.** At load, the proxy redirects the game's `DirectInput8Create` import
+  and filters the DualSense out of `EnumDevices` / `CreateDevice`.
 
-## Requirements
+### Build
 
-- Windows x64, the Steam version of the game
-- [Zig](https://ziglang.org/) as the C compiler: either `zig` on `PATH`, or `pip install ziglang`
-- **Steam Input disabled for the game**: Steam > right-click the game > Properties >
-  Controller > *Disable Steam Input*. Otherwise Steam adds a virtual Xbox pad.
-
-## Usage
+Requires [Zig](https://ziglang.org/) as the C compiler: either `zig` on `PATH`, or `pip install ziglang`.
 
 ```powershell
-.\scripts\build.ps1                 # -> build\libScePad.dll
-.\scripts\install.ps1               # game must be closed
-.\scripts\uninstall.ps1             # restores the original DLL
+.\scripts\build.ps1                    # -> build\libScePad.dll
+.\scripts\build.ps1 -DebugLog          # also log every button / stick change
+.\scripts\build.ps1 -Tools             # also build the test tools
+.\scripts\package.ps1 -Version 1.0.0   # -> dist\Detroit-DualSense-1.0.0.zip for players
+.\scripts\install.ps1                  # install from build\ (auto-detects the game, or -GameDir)
+.\scripts\uninstall.ps1
 ```
 
-`install.ps1` takes `-GameDir` if the game is not in the default Steam library. Re-run it
-after a game update or *Verify integrity of game files*, since those restore the original DLL.
+The proxy always writes a short log to `%TEMP%\dualsense_proxy.log`.
 
-Debug build (logs every button / stick change):
+### Test tools
 
-```powershell
-.\scripts\build.ps1 -DebugLog
-```
-
-The proxy always writes a short lifecycle log to `%TEMP%\dualsense_proxy.log`
-(load, pad found, DirectInput hooked, errors).
-
-## Test tools
-
-`.\scripts\build.ps1 -Tools` builds these into `build\`. Each takes the full path of a
-`libScePad.dll` as its argument. That DLL must sit next to `libScePad_orig.dll`.
+Each tool takes the full path of a `libScePad.dll`. That DLL must sit next to
+`libScePad_orig.dll`.
 
 | Tool | What it checks |
 |---|---|
-| `padtest.exe <dll>` | Opens player 1 and prints connection, buttons, sticks and triggers for 3 s |
-| `perf.exe <dll>` | Times per-frame ReadState + SetVibration + SetLightBar calls |
-| `ditest.exe <dll>` | Lists DirectInput game controllers before and after loading the DLL |
-| `motiontest.exe <dll> [seconds]` | Prints orientation, acceleration and gyro for player 1 |
+| `padtest.exe <dll>` | Connection, buttons, sticks and triggers for 3 s |
+| `motiontest.exe <dll> [seconds]` | Orientation, acceleration and gyro |
+| `perf.exe <dll>` | Time per frame of the ReadState + SetVibration + SetLightBar calls |
+| `ditest.exe <dll>` | DirectInput controllers before and after loading the DLL |
 
-## Status
+### Layout
 
-| Feature | State |
-|---|---|
-| Buttons, sticks, triggers, D-pad over USB | Working |
-| PlayStation prompts, rumble, lightbar | Working |
-| Gyro / accelerometer | Factory-calibrated; orientation computed from gyro + gravity. Verified with motiontest (at rest and moving), untested in game |
-| Touchpad | Mapped, untested in game |
-| Bluetooth | Implemented (report `0x31` + CRC32), untested |
-| Unplug / replug mid-game | Retries every 2 s, untested |
-| Adaptive triggers, DualSense haptic effects | Not possible, since the game never asks for them |
-
-The DualSense has no classic rumble motors. The game's DS4 rumble is played through its
-haptic actuators, so it feels sharper than on a DualShock 4.
+```
+src/libScePad.c     the proxy
+scripts/            build, package, install, uninstall (common.ps1 = shared helpers)
+package/            files shipped only in the player zip (Install.bat, Uninstall.bat, README.txt)
+tools/              test programs
+```
