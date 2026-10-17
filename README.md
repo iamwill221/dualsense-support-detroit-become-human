@@ -79,7 +79,7 @@ The proxy always writes a short lifecycle log to `%TEMP%\dualsense_proxy.log`
 |---|---|
 | Buttons, sticks, triggers, D-pad over USB | Working |
 | PlayStation prompts, rumble, lightbar | Working |
-| Gyro / accelerometer | Factory-calibrated; orientation computed from gyro + gravity. Verified at rest, untested in game |
+| Gyro / accelerometer | Factory-calibrated; orientation computed from gyro + gravity. Verified with motiontest (at rest and moving), untested in game |
 | Touchpad | Mapped, untested in game |
 | Bluetooth | Implemented (report `0x31` + CRC32), untested |
 | Unplug / replug mid-game | Retries every 2 s, untested |
