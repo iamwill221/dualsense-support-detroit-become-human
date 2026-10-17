@@ -3,6 +3,10 @@
 Play *Detroit: Become Human* on PC with a **PS5 DualSense** controller: PlayStation
 buttons on screen, rumble, lightbar and motion. You don't need Steam Input or DS4Windows.
 
+> Fan-made and unofficial. Not affiliated with Sony Interactive Entertainment, Quantic Dream
+> or Valve. It doesn't include or modify any game files except the one DLL it swaps, and the
+> original is kept and can be restored at any time. Use at your own risk.
+
 ## For players
 
 ### Install
@@ -112,3 +116,7 @@ scripts/            build, package, install, uninstall (common.ps1 = shared help
 package/            files shipped only in the player zip (Install.bat, Uninstall.bat, README.txt)
 tools/              test programs
 ```
+
+## License
+
+[MIT](LICENSE)

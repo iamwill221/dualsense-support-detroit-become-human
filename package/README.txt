@@ -21,3 +21,6 @@ PROBLEMS?
   - Controller not working: connect it before starting the game, or try a USB cable.
   - "Windows protected your PC": click More info > Run anyway.
   - A log is written to %TEMP%\dualsense_proxy.log (paste that path in Explorer).
+
+Fan-made and unofficial; not affiliated with Sony, Quantic Dream or Valve.
+Use at your own risk. MIT license, see LICENSE.txt.
