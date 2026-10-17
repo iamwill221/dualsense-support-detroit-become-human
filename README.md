@@ -12,7 +12,7 @@ buttons on screen, rumble, lightbar and motion. You don't need Steam Input or DS
    permission, click **Yes**.
 3. In Steam, right-click the game > **Properties** > **Controller** and choose
    **Disable Steam Input**.
-4. Plug in the DualSense with a **USB cable** and start the game.
+4. Connect the DualSense (USB cable or Bluetooth) and start the game.
 
 If a game update removes DualSense support, run `Install.bat` again.
 
@@ -25,7 +25,7 @@ Double-click **`Uninstall.bat`**, or use Steam > *Verify integrity of game files
 | Problem | Fix |
 |---|---|
 | Xbox buttons on screen, or they flip between Xbox and PlayStation | Steam Input is still on (step 3) |
-| Controller does nothing | Use a USB cable. Bluetooth is not tested yet |
+| Controller does nothing | Make sure it's connected before starting the game; try a USB cable |
 | "Windows protected your PC" | Click **More info** > **Run anyway** |
 | The installer can't find the game | Paste the game folder when it asks. To find it: Steam > right-click the game > *Manage* > *Browse local files* |
 | Something else | Open `%TEMP%\dualsense_proxy.log` and include it in your bug report |
@@ -38,8 +38,8 @@ Double-click **`Uninstall.bat`**, or use Steam > *Verify integrity of game files
 | PlayStation button prompts | ✅ |
 | Rumble, lightbar | ✅ |
 | Motion (gyro / accelerometer) | ✅ Tested outside the game |
-| Touchpad | Mapped, not tested in game |
-| Bluetooth | Written, not tested |
+| Touchpad | ✅ |
+| USB and Bluetooth | ✅ |
 | Adaptive triggers, DualSense haptic effects | ❌ The game never asks for them |
 
 The DualSense has no classic rumble motors. It plays the game's rumble through its

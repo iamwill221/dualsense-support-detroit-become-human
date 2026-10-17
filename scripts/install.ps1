@@ -38,7 +38,7 @@ One more step, in Steam:
   right-click Detroit: Become Human > Properties > Controller
   > set it to "Disable Steam Input".
 
-Then plug in your DualSense (USB) and start the game.
+Then connect your DualSense (USB or Bluetooth) and start the game.
 If a game update ever removes DualSense support, just run Install again.
 "@
 } catch {
